@@ -5,6 +5,10 @@ type: application
 version: 0.1.0
 appVersion: "0.1.0"
 dependencies:
+  - name: llm-service
+    version: 0.5.13
+    repository: https://rh-ai-quickstart.github.io/ai-architecture-charts
+    condition: llm-service.enabled
   - name: aws-compatible-storage
     version: 0.1.0
     repository: https://rh-ai-quickstart.github.io/ai-architecture-charts
