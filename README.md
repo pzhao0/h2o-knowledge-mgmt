@@ -4,26 +4,37 @@
 
 This repository is an early scaffold for an AI Quickstart exploring knowledge management with H2O.ai and Red Hat OpenShift AI.
 
-It currently contains a small Python API scaffold deployed with Helm alongside S3-compatible storage and RHOAI-managed vLLM inference. On install, a Job uploads the configured sample document to the `documents` bucket. The API currently provides a health endpoint at `/healthz`.
+It currently contains a small Python API scaffold deployed with Helm alongside S3-compatible storage and RHOAI-managed vLLM inference. On install, a Job uploads the configured sample document to the `documents` bucket. The API provides a health endpoint at `/healthz` and an ask endpoint at `/ask` for sending prompts to the configured model.
 
 ## Repository layout
 
 ```text
-services/api/                    Python API, tests, and its uv.lock
-services/document-uploader/      Sample upload job and its uv.lock
-deploy/helm/h2o-knowledge-mgmt/  Helm chart for the API, S3 storage, document upload, and inference
+.
+├── deploy/
+│   └── helm/
+│       └── h2o-knowledge-mgmt/  Helm chart for the API, S3 storage, document upload, and inference
+└── services/
+    ├── api/                     Python API, tests, and its uv.lock
+    └── document-uploader/       Sample upload job and its uv.lock
 ```
 
 ## Installation
 
+To deploy this project:
+
 ```bash
-make deploy STORAGE_ACCESS_KEY_ID=my-access-key STORAGE_SECRET_ACCESS_KEY=my-secret-key
+export STORAGE_ACCESS_KEY_ID=<my-access-key>
+export STORAGE_SECRET_ACCESS_KEY=<my-secret-key>
+make deploy NAMESPACE=<my-namespace>
 ```
 
-This uses the namespace from the current Kubernetes context. To deploy to a specific namespace (created if needed):
+This command builds the chart dependencies, then installs or upgrades the Helm release. It deploys the API, S3 storage, document upload job, and vLLM inference into the provided namespace (created if needed). If `NAMESPACE` is omitted, it uses the namespace from the current Kubernetes context.
+
+For a GPU pool with a custom taint, set its toleration before deploying. For example:
 
 ```bash
-make deploy NAMESPACE=my-namespace STORAGE_ACCESS_KEY_ID=my-access-key STORAGE_SECRET_ACCESS_KEY=my-secret-key
+export GPU_TOLERATIONS='[{"key":"g5-gpu","operator":"Equal","value":"true","effect":"NoSchedule"}]'
+make deploy
 ```
 
 ## Project teardown
@@ -35,79 +46,24 @@ make undeploy
 make undeploy NAMESPACE=my-namespace
 ```
 
-## Make targets
+## vLLM inference
 
-
-| Target           | Purpose                                                              |
-| ---------------- | -------------------------------------------------------------------- |
-| `make setup`     | Install Python and development dependencies.                         |
-| `make test`      | Run API tests.                                                       |
-| `make lint`      | Check Python code style.                                             |
-| `make dev`       | Run the API locally.                                                 |
-| `make helm-lint` | Check the Helm chart.                                                |
-| `make helm-dependency-build` | Build dependencies from the checked-in `Chart.lock`.                  |
-| `make helm-dependency-update` | Update dependency versions and the checked-in `Chart.lock`.           |
-| `make deploy`    | Install the API, S3 storage, document upload, and vLLM inference. |
-| `make undeploy`  | Remove the deployment.                                               |
-
-Set `STORAGE_ACCESS_KEY_ID` and `STORAGE_SECRET_ACCESS_KEY` when deploying. The chart rejects empty storage credentials.
-
-The chart creates an HTTPS OpenShift Route for the API by default. Find its host with `oc get routes`; the API docs are available at `https://<route-host>/docs`.
+Inference is enabled by default and requires RHOAI with KServe and an available NVIDIA GPU. The pinned `llm-service` chart deploys [RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8](https://huggingface.co/RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8), which the API calls through the internal endpoint `http://h2o-llm-vllm/v1`. No Hugging Face token is required.
 
 ## Try a model request
 
-The API's `POST /ask` endpoint sends one prompt to the configured OpenAI-compatible model and returns its answer. For a quick local demo against the model already running in the cluster, port-forward the model service:
+The chart creates an HTTPS OpenShift Route for the API. Find its host with `oc get routes`, then open `https://<route-host>/docs`. In the API docs, expand `POST /ask`, select **Try it out**, enter a prompt such as `{"prompt":"In one sentence, what is a Kubernetes pod?"}`, and select **Execute**. The response contains the model's answer.
 
-```bash
-oc port-forward svc/h2o-llm-vllm 8001:80
-```
+## Make targets
 
-In another terminal, run the API with the forwarded model URL (after `make setup` if its dependencies are not installed):
-
-```bash
-LLM_BASE_URL=http://localhost:8001/v1 make dev
-```
-
-Then send a prompt:
-
-```bash
-curl -s http://localhost:8000/ask \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"In one sentence, what is a Kubernetes pod?"}'
-```
-
-The response has the shape `{"answer":"..."}`. The API defaults to `http://h2o-llm-vllm/v1` and the model ID configured by this chart, so a rebuilt API image running in the cluster can call the model directly. Override `llm.baseUrl`, `llm.model`, or `llm.timeoutSeconds` in Helm values for a different endpoint or model. The local demo only needs the model port-forward; it does not require an API image rebuild.
-
-## vLLM inference
-
-The pinned `llm-service` chart (`0.5.13`) creates a KServe `ServingRuntime`, an `InferenceService`, and an internal Service. RHOAI/KServe manages the inference workload. RHOAI with KServe and an available NVIDIA GPU must already be configured on the cluster.
-
-Inference is enabled by default in `values.yaml`, serving [RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8](https://huggingface.co/RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8). The normal installation commands above include inference. To deploy without it:
-
-```bash
-make deploy NAMESPACE=my-namespace \
-  STORAGE_ACCESS_KEY_ID=my-access-key STORAGE_SECRET_ACCESS_KEY=my-secret-key \
-  HELM_ARGS='--set llm-service.enabled=false'
-```
-
-Inference requests one GPU, 1 CPU, 16Gi RAM, and 20Gi ephemeral storage; host-memory and storage limits are 32Gi and 30Gi. It uses the chart's default NVIDIA image, `vllm/vllm-openai:v0.11.1`, and a pinned Hugging Face model revision. The public model requires no Hugging Face token. The volume override removes an unused chat-template ConfigMap dependency that can disappear during chart upgrades.
-
-The 3B model uses INT8 weights and activations, supported directly on Ampere GPUs such as A10G. The profile limits context to 2,048 tokens and concurrency to four sequences, with a 75% GPU-memory budget. See [vLLM INT8 hardware support](https://docs.vllm.ai/en/v0.11.1/features/quantization/int8/).
-
-The image and toleration are explicitly set under `llm-service.deviceConfigs.gpu` in `values.yaml`, matching the pinned chart defaults. The default toleration is `nvidia.com/gpu:NoSchedule` with `operator: Exists`. For pools with custom taints, pass `GPU_TOLERATIONS` as a JSON array to `make deploy`. For example, with storage credentials already exported, the test cluster's A10G pool requires:
-
-```bash
-make deploy NAMESPACE=my-namespace \
-  GPU_TOLERATIONS='[{"key":"g5-gpu","operator":"Equal","value":"true","effect":"NoSchedule"}]'
-```
-
-Or export it as an environment variable:
-
-```bash
-export GPU_TOLERATIONS='[{"key":"g5-gpu","operator":"Equal","value":"true","effect":"NoSchedule"}]'
-make deploy NAMESPACE=my-namespace
-```
-
-Both examples require `STORAGE_ACCESS_KEY_ID` and `STORAGE_SECRET_ACCESS_KEY` to be set. Omit `GPU_TOLERATIONS` to use the chart values, or set it to `[]` to remove GPU tolerations. The array replaces the configured tolerations. A local values file passed through `HELM_ARGS='-f /path/to/cluster-values.yaml'` is also supported.
-
-The internal OpenAI base URL is `http://h2o-llm-vllm/v1`, and the model ID is `RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8`. The chart version and model revision are pinned; the image is a version tag, so identical image bytes require an optional digest override. The earlier live deployment verified an 8B model; this 3B configuration has not yet been verified on the cluster.
+| Target                       | Purpose                                                        |
+| ---------------------------- | -------------------------------------------------------------- |
+| `make setup`                 | Install Python and development dependencies.                   |
+| `make test`                  | Run API tests.                                                 |
+| `make lint`                  | Check Python code style.                                       |
+| `make dev`                   | Run the API locally.                                           |
+| `make helm-lint`             | Check the Helm chart.                                          |
+| `make helm-dependency-build` | Build dependencies from the checked-in `Chart.lock`.           |
+| `make helm-dependency-update` | Update dependency versions and the checked-in `Chart.lock`.   |
+| `make deploy`                | Install or upgrade the API, storage, upload job, and inference. |
+| `make undeploy`              | Remove the deployment.                                         |
