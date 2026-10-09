@@ -52,6 +52,31 @@ make undeploy NAMESPACE=my-namespace
 
 Set `STORAGE_ACCESS_KEY_ID` and `STORAGE_SECRET_ACCESS_KEY` when deploying. The chart rejects empty storage credentials.
 
+The chart creates an HTTPS OpenShift Route for the API by default. Find its host with `oc get routes`; the API docs are available at `https://<route-host>/docs`.
+
+## Try a model request
+
+The API's `POST /ask` endpoint sends one prompt to the configured OpenAI-compatible model and returns its answer. For a quick local demo against the model already running in the cluster, port-forward the model service:
+
+```bash
+oc port-forward svc/h2o-llm-vllm 8001:80
+```
+
+In another terminal, run the API with the forwarded model URL (after `make setup` if its dependencies are not installed):
+
+```bash
+LLM_BASE_URL=http://localhost:8001/v1 make dev
+```
+
+Then send a prompt:
+
+```bash
+curl -s http://localhost:8000/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"In one sentence, what is a Kubernetes pod?"}'
+```
+
+The response has the shape `{"answer":"..."}`. The API defaults to `http://h2o-llm-vllm/v1` and the model ID configured by this chart, so a rebuilt API image running in the cluster can call the model directly. Override `llm.baseUrl`, `llm.model`, or `llm.timeoutSeconds` in Helm values for a different endpoint or model. The local demo only needs the model port-forward; it does not require an API image rebuild.
 
 ## vLLM inference
 

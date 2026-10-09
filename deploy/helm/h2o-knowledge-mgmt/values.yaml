@@ -9,7 +9,19 @@ service:
   type: ClusterIP
   port: 8000
 
+route:
+  enabled: true
+  host: ""
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
 resources: {}
+
+llm:
+  baseUrl: http://h2o-llm-vllm/v1
+  model: RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8
+  timeoutSeconds: 60
 
 # RHOAI/KServe inference is enabled by default.
 llm-service:
