@@ -1,0 +1,15 @@
+FROM registry.access.redhat.com/ubi9/python-312:latest
+
+WORKDIR /opt/app-root/src
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /uvx /bin/
+COPY --chown=1001:0 services/api/pyproject.toml services/api/uv.lock ./
+COPY --chown=1001:0 services/api/src ./src
+
+RUN uv sync --locked --no-dev --no-cache
+
+ENV PATH="/opt/app-root/src/.venv/bin:${PATH}"
+
+EXPOSE 8000
+
+CMD ["uvicorn", "h2o_knowledge_mgmt_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

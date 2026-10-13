@@ -1,0 +1,59 @@
+{{- if .Values.sampleFileUpload.enabled }}
+{{- if not (index (index .Values "aws-compatible-storage") "enabled") }}
+{{- fail "sampleFileUpload.enabled requires aws-compatible-storage.enabled" }}
+{{- end }}
+{{- $uploadConfig := dict "bucket" .Values.sampleFileUpload.bucket "region" .Values.sampleFileUpload.region "urls" .Values.sampleFileUpload.urls -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-sample-upload-%s" (include "h2o-knowledge-mgmt.fullname" . | trunc 38 | trimSuffix "-") ($uploadConfig | toJson | sha256sum | trunc 8) | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "h2o-knowledge-mgmt.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "h2o-knowledge-mgmt.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: upload-sample-documents
+          image: "{{ .Values.sampleFileUpload.image.repository }}:{{ .Values.sampleFileUpload.image.tag }}"
+          imagePullPolicy: {{ .Values.sampleFileUpload.image.pullPolicy }}
+          env:
+            - name: HOME
+              value: /tmp
+            - name: SAMPLE_UPLOAD_BUCKET
+              value: {{ .Values.sampleFileUpload.bucket | quote }}
+            - name: SAMPLE_UPLOAD_REGION
+              value: {{ .Values.sampleFileUpload.region | quote }}
+            - name: SAMPLE_UPLOAD_URLS
+              value: {{ .Values.sampleFileUpload.urls | toJson | quote }}
+            - name: AWS_S3_ENDPOINT
+              value: {{ printf "http://%s:7480" (include "h2o-knowledge-mgmt.storage.fullname" .) | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h2o-knowledge-mgmt.storage.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h2o-knowledge-mgmt.storage.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+{{- end }}

@@ -1,0 +1,61 @@
+{{- $storage := index .Values "aws-compatible-storage" -}}
+{{- if $storage.enabled -}}
+{{- $_ := required "aws-compatible-storage.s3.accessKeyId must be provided" $storage.s3.accessKeyId -}}
+{{- $_ := required "aws-compatible-storage.s3.secretAccessKey must be provided" $storage.s3.secretAccessKey -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "h2o-knowledge-mgmt.fullname" . }}
+  labels:
+    {{- include "h2o-knowledge-mgmt.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "h2o-knowledge-mgmt.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "h2o-knowledge-mgmt.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: LLM_BASE_URL
+              value: {{ .Values.llm.baseUrl | quote }}
+            - name: LLM_MODEL
+              value: {{ .Values.llm.model | quote }}
+            - name: LLM_TIMEOUT_SECONDS
+              value: {{ .Values.llm.timeoutSeconds | quote }}
+            - name: AWS_S3_ENDPOINT
+              value: {{ printf "http://%s:7480" (include "h2o-knowledge-mgmt.storage.fullname" .) | quote }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ index .Values "aws-compatible-storage" "s3" "region" | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h2o-knowledge-mgmt.storage.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h2o-knowledge-mgmt.storage.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

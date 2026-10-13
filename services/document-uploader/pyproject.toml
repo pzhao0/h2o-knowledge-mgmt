@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "h2o-knowledge-mgmt-document-uploader"
+version = "0.1.0"
+description = "Sample document upload job for the H2O Knowledge Management quickstart"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.35",
+    "requests>=2.32",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
