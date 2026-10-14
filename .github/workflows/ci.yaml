@@ -36,5 +36,8 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v5
 
+      - name: Add Helm dependency repository
+        run: helm repo add ai-architecture-charts https://rh-ai-quickstart.github.io/ai-architecture-charts
+
       - name: Lint Helm chart
         run: make helm-lint
