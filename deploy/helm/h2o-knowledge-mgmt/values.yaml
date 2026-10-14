@@ -2,7 +2,8 @@ replicaCount: 1
 
 image:
   repository: quay.io/ecosystem-appeng/h2o-knowledge-mgmt-api
-  tag: latest
+  tag: "0.1.0"
+  digest: sha256:eb201124d543dcd23a3a735feeefaf6320c4d7c12d1dafe84a6287aa9e61069a
   pullPolicy: IfNotPresent
 
 service:
@@ -29,7 +30,7 @@ llm-service:
   # Customize for your cluster here.
   deviceConfigs:
     gpu:
-      image: vllm/vllm-openai:v0.11.1
+      image: vllm/vllm-openai:v0.11.1@sha256:d5b12dfb74d605615f8b29ebafaa52294c118bcac7bc9e941785c4108fdb913a
       tolerations:
         - key: nvidia.com/gpu
           effect: NoSchedule
@@ -113,6 +114,7 @@ sampleFileUpload:
   image:
     repository: quay.io/ecosystem-appeng/h2o-knowledge-mgmt-document-uploader-job
     tag: "0.1.4"
+    digest: sha256:54f8ea596033b2704afd7352a90d3e11bb89b60c963807f2bb4e8903e756fde1
     pullPolicy: IfNotPresent
   urls:
     - https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/pdf/overview/OpenShift_Container_Platform-4.19-Overview-en-US.pdf
