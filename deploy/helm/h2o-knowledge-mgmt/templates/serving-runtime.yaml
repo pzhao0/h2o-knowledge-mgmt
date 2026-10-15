@@ -1,0 +1,73 @@
+{{- if .Values.inference.enabled }}
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: {{ .Values.inference.runtime.name }}
+  labels:
+    {{- include "h2o-knowledge-mgmt.inferenceLabels" . | nindent 4 }}
+    opendatahub.io/dashboard: "true"
+  annotations:
+    openshift.io/display-name: {{ .Values.inference.runtime.name | quote }}
+    opendatahub.io/apiProtocol: REST
+    opendatahub.io/recommended-accelerators: {{ list .Values.inference.gpuResourceName | toJson | quote }}
+spec:
+  multiModel: false
+  supportedModelFormats:
+    - name: vLLM
+      autoSelect: true
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8080"
+  containers:
+    - name: kserve-container
+      image: {{ .Values.inference.runtime.image | quote }}
+      command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+      args:
+        - --port
+        - "8080"
+        - --download-dir
+        - /vllm/model
+      {{- with .Values.inference.runtime.env }}
+      env:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+      # Allow up to 30 minutes for downloading weights and initializing vLLM.
+      startupProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 180
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        periodSeconds: 10
+        timeoutSeconds: 5
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        periodSeconds: 30
+        timeoutSeconds: 5
+        failureThreshold: 3
+      volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        - name: vllm-home
+          mountPath: /vllm
+  volumes:
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 2Gi
+    - name: vllm-home
+      emptyDir: {}
+{{- end }}
