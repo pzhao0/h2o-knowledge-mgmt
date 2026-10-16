@@ -66,7 +66,7 @@ The chart serves [Mistral Small 3.1 24B INT8](https://huggingface.co/RedHatAI/Mi
 
 The internal endpoint is `http://h2o-llm-vllm/v1`. `/ask` sends text prompts to this endpoint. Tool calling is enabled for clients that supply tool definitions and handle the results; `/ask` does not execute tools.
 
-The model revision, runtime, and resource settings are in [values.yaml](deploy/helm/h2o-knowledge-mgmt/values.yaml). Defaults allow 4096 tokens per sequence and 2 concurrent sequences. The server uses one replica with `Recreate` updates, so it is unavailable while a replacement loads.
+Configure the single server in [values.yaml](deploy/helm/h2o-knowledge-mgmt/values.yaml). Defaults allow 16,384 tokens per sequence (input plus output) and 2 concurrent sequences. The server uses one replica with `Recreate` updates, so it is unavailable while a replacement loads.
 
 Use the API docs below for a basic inference check. See [live A100 validation](docs/gpu-mig-setup.md#validate-inference-on-the-a100) for GPU allocation, tool calling, and concurrent workload checks.
 
