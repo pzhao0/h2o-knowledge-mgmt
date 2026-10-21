@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://h2o-llm-vllm/v1").rstrip("/")
 LLM_MODEL = os.getenv(
-    "LLM_MODEL", "RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8"
+    "LLM_MODEL", "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w8a8"
 )
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 

@@ -1,0 +1,78 @@
+{{- if .Values.inference.enabled }}
+{{- $inference := .Values.inference }}
+{{- $model := $inference.model }}
+{{- $node := required "inference.nodeName must be provided when inference is enabled (make deploy GPU_NODE=<hostname>)" $inference.nodeName }}
+{{- $gpu := required "inference.gpuResourceName must be provided" $inference.gpuResourceName }}
+{{- $resources := deepCopy $model.resources }}
+{{- range $kind := list "requests" "limits" }}
+{{- range $key, $_ := get $resources $kind }}
+{{- if hasPrefix "nvidia.com/" $key }}
+{{- fail "GPU resources are managed by inference.gpuResourceName; omit nvidia.com/* keys from model resources" }}
+{{- end }}
+{{- end }}
+{{- $_ := set (get $resources $kind) $gpu 1 }}
+{{- end }}
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: h2o-llm
+  labels:
+    {{- include "h2o-knowledge-mgmt.inferenceLabels" . | nindent 4 }}
+    opendatahub.io/dashboard: "true"
+    networking.kserve.io/visibility: cluster-local
+  annotations:
+    openshift.io/display-name: "h2o-llm"
+    serving.kserve.io/deploymentMode: RawDeployment
+    serving.kserve.io/gpu-resource-types: {{ list $gpu | toJson | quote }}
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    deploymentStrategy:
+      type: Recreate
+    nodeSelector:
+      kubernetes.io/hostname: {{ $node | quote }}
+    {{- with $inference.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    model:
+      modelFormat:
+        name: vLLM
+      runtime: {{ $inference.runtime.name }}
+      args:
+        - --model
+        - {{ required "inference.model.id must be provided" $model.id | quote }}
+        - --served-model-name
+        - {{ $model.id | quote }}
+        {{- with $model.revision }}
+        - --revision
+        - {{ . | quote }}
+        {{- end }}
+        {{- with $model.args }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $model.env }}
+      env:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      resources:
+        {{- toYaml $resources | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: h2o-llm-vllm
+  labels:
+    {{- include "h2o-knowledge-mgmt.inferenceLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: isvc.h2o-llm-predictor
+{{- end }}

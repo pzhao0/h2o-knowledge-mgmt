@@ -1,0 +1,20 @@
+# Administrator-owned GPU Operator configuration; not installed by Helm.
+# Apply in the GPU Operator namespace. If a custom config is already in use,
+# merge this profile into it instead of replacing the existing configuration.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: h2o-a100-mig-config
+data:
+  config.yaml: |
+    version: v1
+    mig-configs:
+      all-disabled:
+        - devices: [0]
+          mig-enabled: false
+      h2o-20-20-rhoai-40:
+        - devices: [0]
+          mig-enabled: true
+          mig-devices:
+            "3g.40gb": 1
+            "2g.20gb": 2

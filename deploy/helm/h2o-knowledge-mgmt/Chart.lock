@@ -1,9 +1,6 @@
 dependencies:
-- name: llm-service
-  repository: https://rh-ai-quickstart.github.io/ai-architecture-charts
-  version: 0.5.13
 - name: aws-compatible-storage
   repository: https://rh-ai-quickstart.github.io/ai-architecture-charts
   version: 0.1.0
-digest: sha256:eb1251ab6649c62e97013514827327dd9b7428a141aa8d33435df79fabadb3c7
-generated: "2026-10-09T09:30:45.57976-04:00"
+digest: sha256:f3a5d872a64dd6fc54c66bbb97e86b27c43fbbc0d2edc9603666d26a5c120f1a
+generated: "2026-10-14T16:14:28.56738-04:00"
