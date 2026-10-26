@@ -2,7 +2,7 @@
 {{- if not (index (index .Values "aws-compatible-storage") "enabled") }}
 {{- fail "sampleFileUpload.enabled requires aws-compatible-storage.enabled" }}
 {{- end }}
-{{- $uploadConfig := dict "bucket" .Values.sampleFileUpload.bucket "region" .Values.sampleFileUpload.region "urls" .Values.sampleFileUpload.urls -}}
+{{- $uploadConfig := dict "bucket" .Values.sampleFileUpload.bucket "region" .Values.sampleFileUpload.region "urls" .Values.sampleFileUpload.urls "appVersion" .Chart.AppVersion -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
