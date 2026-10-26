@@ -1,17 +1,22 @@
+ENV_FILE ?= ./.env
+ifneq (,$(wildcard $(ENV_FILE)))
+include $(ENV_FILE)
+endif
+
 RELEASE ?= h2o-knowledge-mgmt
 NAMESPACE ?=
 HELM_ARGS ?=
-GPU_NODE ?=
-GPU_TOLERATIONS ?=
 STORAGE_ACCESS_KEY_ID ?=
 STORAGE_SECRET_ACCESS_KEY ?=
+LLM_BASE_URL ?=
+LLM_MODEL ?=
+LLM_API_KEY ?=
+export LLM_BASE_URL LLM_MODEL LLM_API_KEY
+export STORAGE_ACCESS_KEY_ID STORAGE_SECRET_ACCESS_KEY
 CHART_DIR := deploy/helm/h2o-knowledge-mgmt
 HELM_NAMESPACE_ARG = $(if $(strip $(NAMESPACE)),--namespace $(NAMESPACE),)
 HELM_CREATE_NAMESPACE_ARG = $(if $(strip $(NAMESPACE)),--create-namespace,)
-STORAGE_CREDENTIAL_ARGS = --set-string aws-compatible-storage.s3.accessKeyId='$(STORAGE_ACCESS_KEY_ID)' --set-string aws-compatible-storage.s3.secretAccessKey='$(STORAGE_SECRET_ACCESS_KEY)'
-GPU_NODE_ARG = $(if $(strip $(GPU_NODE)),--set-string 'inference.nodeName=$(GPU_NODE)',)
-GPU_TOLERATION_ARGS = $(if $(strip $(GPU_TOLERATIONS)),--set-json 'inference.tolerations=$(GPU_TOLERATIONS)',)
-HELM_LINT_ARGS = --set-string inference.nodeName=test-a100 --set-string aws-compatible-storage.s3.accessKeyId=test-access --set-string aws-compatible-storage.s3.secretAccessKey=test-secret
+HELM_LINT_ARGS = --set-string llm.baseUrl=https://maas.example.test/v1 --set-string llm.model=test-model --set-string aws-compatible-storage.s3.accessKeyId=test-access --set-string aws-compatible-storage.s3.secretAccessKey=test-secret
 
 .PHONY: setup test lint dev helm-lint helm-dependency-build helm-dependency-update deploy undeploy
 
@@ -37,10 +42,14 @@ helm-dependency-update:
 	helm dependency update $(CHART_DIR)
 
 deploy: helm-dependency-build
-	@if [ -z "$(strip $(STORAGE_ACCESS_KEY_ID))" ] || [ -z "$(strip $(STORAGE_SECRET_ACCESS_KEY))" ]; then \
-		echo "Set STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY to deploy." >&2; exit 1; \
-	fi
-	helm upgrade --install $(RELEASE) $(CHART_DIR) $(HELM_NAMESPACE_ARG) $(HELM_CREATE_NAMESPACE_ARG) $(STORAGE_CREDENTIAL_ARGS) $(GPU_NODE_ARG) $(GPU_TOLERATION_ARGS) $(HELM_ARGS)
+	@set -eu; \
+	values=$$(mktemp); \
+	trap 'rm -f "$$values"' EXIT; \
+	jq -n '{ \
+	    llm: {baseUrl: env.LLM_BASE_URL, model: env.LLM_MODEL, apiKey: env.LLM_API_KEY}, \
+	    "aws-compatible-storage": {s3: {accessKeyId: env.STORAGE_ACCESS_KEY_ID, secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY}} \
+	}' > "$$values"; \
+	helm upgrade --install $(RELEASE) $(CHART_DIR) $(HELM_NAMESPACE_ARG) $(HELM_CREATE_NAMESPACE_ARG) --values "$$values" $(HELM_ARGS)
 
 undeploy:
 	helm uninstall $(RELEASE) $(HELM_NAMESPACE_ARG)

@@ -2,8 +2,8 @@ replicaCount: 1
 
 image:
   repository: quay.io/ecosystem-appeng/h2o-knowledge-mgmt-api
-  tag: "0.1.0"
-  digest: sha256:eb201124d543dcd23a3a735feeefaf6320c4d7c12d1dafe84a6287aa9e61069a
+  tag: "0.2.0"
+  digest: sha256:7e92072fff69656c535ef7d6b28a5116057e8a447f33e1f64a85e130fd0c0815
   pullPolicy: IfNotPresent
 
 service:
@@ -19,69 +19,14 @@ route:
 
 resources: {}
 
+# External OpenAI-compatible endpoint (MaaS or another provider).
+# Use the API base URL, including /v1 if required by the provider.
 llm:
-  baseUrl: http://h2o-llm-vllm/v1
-  model: RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w8a8
+  baseUrl: ""
+  model: ""
   timeoutSeconds: 60
-
-# One OpenShift AI server on 40 GB; the two 20 GB MIG instances belong to H2O.
-# The administrator configures the GPU layout separately (see deploy/mig/).
-inference:
-  enabled: true
-  # Required when enabled; use the node's kubernetes.io/hostname label (GPU_NODE).
-  nodeName: ""
-  gpuResourceName: nvidia.com/mig-3g.40gb
-  tolerations:
-    - key: nvidia.com/gpu
-      effect: NoSchedule
-      operator: Exists
-  runtime:
-    name: h2o-vllm-runtime-gpu
-    image: vllm/vllm-openai:v0.11.1@sha256:d5b12dfb74d605615f8b29ebafaa52294c118bcac7bc9e941785c4108fdb913a
-    # Public, ungated default model; no HF token required.
-    env:
-      - name: HOME
-        value: /vllm
-      - name: HF_HOME
-        value: /vllm/hf-home
-      - name: HF_HUB_OFFLINE
-        value: "0"
-  # Single model served by h2o-llm and uses
-  # gpuResourceName above; keep nvidia.com/* keys out of these resources.
-  model:
-    id: RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w8a8
-    revision: 57f2eba3d20edd3dfd95af67e3f50940e4732146
-    resources:
-      requests:
-        cpu: "4"
-        memory: 32Gi
-        ephemeral-storage: 60Gi
-      limits:
-        cpu: "8"
-        memory: 64Gi
-        ephemeral-storage: 80Gi
-    args:
-      - --quantization
-      - compressed-tensors
-      # Keep quantization metadata from config.json (params.json omits it).
-      - --config-format
-      - hf
-      - --tokenizer-mode
-      - mistral
-      - --enable-auto-tool-choice
-      - --tool-call-parser
-      - mistral
-      # Text/tool serving only; avoid vision encoder allocation/profiling.
-      - --limit-mm-per-prompt
-      - '{"image":0}'
-      - --max-model-len
-      - "16384"
-      - --max-num-seqs
-      - "2"
-      # Fraction of the MIG instance's memory, not the full physical GPU.
-      - --gpu-memory-utilization
-      - "0.90"
-    env: []
+  # Optional token supplied at deployment time; never commit a real credential.
+  apiKey: ""
 
 aws-compatible-storage:
   enabled: true

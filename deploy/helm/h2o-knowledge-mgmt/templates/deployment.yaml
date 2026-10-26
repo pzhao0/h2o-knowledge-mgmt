@@ -22,15 +22,22 @@ spec:
     spec:
       containers:
         - name: api
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}@{{ .Values.image.digest }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: LLM_BASE_URL
-              value: {{ .Values.llm.baseUrl | quote }}
+              value: {{ required "llm.baseUrl must be provided (LLM_BASE_URL for make deploy)" .Values.llm.baseUrl | quote }}
             - name: LLM_MODEL
-              value: {{ .Values.llm.model | quote }}
+              value: {{ required "llm.model must be provided (LLM_MODEL for make deploy)" .Values.llm.model | quote }}
             - name: LLM_TIMEOUT_SECONDS
               value: {{ .Values.llm.timeoutSeconds | quote }}
+            {{- if .Values.llm.apiKey }}
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "h2o-knowledge-mgmt.llm.secretName" . | quote }}
+                  key: LLM_API_KEY
+            {{- end }}
             - name: AWS_S3_ENDPOINT
               value: {{ printf "http://%s:7480" (include "h2o-knowledge-mgmt.storage.fullname" .) | quote }}
             - name: AWS_DEFAULT_REGION

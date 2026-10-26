@@ -13,12 +13,8 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{/* KServe propagates InferenceService labels to pods; keep them out of the API selector. */}}
-{{- define "h2o-knowledge-mgmt.inferenceLabels" -}}
-{{- $labels := include "h2o-knowledge-mgmt.labels" . | fromYaml -}}
-{{- $_ := set $labels "app.kubernetes.io/name" "vllm" -}}
-{{- $_ := set $labels "app.kubernetes.io/component" "inference" -}}
-{{- toYaml $labels -}}
+{{- define "h2o-knowledge-mgmt.llm.secretName" -}}
+{{- printf "%s-llm" (include "h2o-knowledge-mgmt.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end }}
 
 {{- define "h2o-knowledge-mgmt.storage.fullname" -}}

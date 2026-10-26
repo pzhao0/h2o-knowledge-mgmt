@@ -1,18 +1,15 @@
 # GPU and MIG cluster setup
 
-Cluster administrators must complete this setup before [installing the application](../README.md#installation). Run the commands from the repository root. The application chart manages namespaced model-serving resources; the cluster administrator manages the NVIDIA operators, ClusterPolicy, and node configuration.
+Cluster administrators prepare the GPU for H2O independently of the application Helm chart. Chat inference uses an external OpenAI-compatible endpoint.
 
 ## Prerequisites
 
-- An OpenShift worker with **one NVIDIA A100 80 GB** available for this workload. The agreed layout is two `2g.20gb` instances for H2O and one `3g.40gb` instance for OpenShift AI. These have approximately 20/20/40 GB dedicated GPU memory and 2/7, 2/7, and 3/7 of the MIG compute slices respectively. Sizes are nominal GPU profile names, not exact usable GiB. An A100 40 GB cannot provide this layout. See [NVIDIA's supported MIG profiles](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/supported-mig-profiles.html).
-- RHOAI with KServe enabled in Standard/RawDeployment mode, and a version whose InferenceService CRD supports `spec.predictor.deploymentStrategy`. Check this before deploying:
-  ```bash
-  oc explain inferenceservice.spec.predictor.deploymentStrategy
-  ```
-- Node Feature Discovery (NFD), including a NodeFeatureDiscovery instance, and NVIDIA GPU Operator, including a ready ClusterPolicy, working driver/device plugin, and MIG Manager. Follow the [NVIDIA OpenShift installation guide](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/install-gpu-ocp.html) and [MIG setup guide](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/mig-ocp.html). Use operator and driver versions compatible with your OpenShift release and the CUDA version in the configured vLLM image.
-- Cluster administrator access for MIG setup; namespace deployment access for `make deploy`. The OpenShift AI predictor requests **4 CPUs, 32 GiB host RAM, and 60 GiB ephemeral storage**, with limits of 8 CPUs, 64 GiB host RAM, and 80 GiB ephemeral storage. Budget separately for both H2O workloads, the application, and platform overhead. Model cache is ephemeral and is downloaded again after pod replacement.
+- One NVIDIA RTX PRO 6000 Blackwell 96 GB, preferably Server Edition, with **two `2g.48gb` MIG instances**. One is for the H2O model pod and one for the H2O function pod. Each receives half of the GPU's MIG SM capacity and nominal memory. Profile sizes are not exact usable GiB. See [NVIDIA's supported MIG profiles](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/supported-mig-profiles.html#rtx-pro-6000-blackwell-mig-profiles).
+- Node Feature Discovery and NVIDIA GPU Operator with a ready ClusterPolicy, working driver/device plugin, and MIG Manager supporting this GPU. Follow the [OpenShift installation guide](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/install-gpu-ocp.html) and [MIG setup guide](https://docs.nvidia.com/datacenter/cloud-native/openshift/latest/mig-ocp.html). Match operator/driver versions to your OpenShift release and H2O's CUDA runtimes. NVIDIA lists R575 (>= 575.51.03) as the minimum for RTX PRO Blackwell MIG; the selected platform or workloads may require newer versions. Workstation and Max-Q editions also require supported vBIOS and compute display mode; see [RTX PRO prerequisites](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/getting-started-with-mig.html#additional-prerequisites-for-rtx-pro-blackwell-gpus).
+- H2O-provided model and function containers compatible with Blackwell SM120. Budget host CPU, RAM, and storage according to H2O's requirements, plus application/platform overhead. Confirm each workload fits its own 48 GB partition, including runtime overhead. A MIG partition provides half the physical GPU's compute capacity; it is not equivalent to a full GPU in throughput.
+- Cluster administrator access for MIG setup. This application's chart requires neither GPU access nor KServe resources. If H2O deploys through OpenShift AI/KServe, its owners must satisfy those platform prerequisites separately.
 
-Record the OpenShift, RHOAI, GPU Operator, and driver versions used for validation. Discover the actual node, operator namespace, and ClusterPolicy rather than assuming the example names:
+Record the OpenShift, GPU Operator, driver, and H2O runtime versions. Discover the actual node, operator namespace, and ClusterPolicy:
 
 ```bash
 oc version
@@ -23,9 +20,8 @@ oc get nodes -L kubernetes.io/hostname,nvidia.com/gpu.product,nvidia.com/mig.cap
 export MIG_NODE=<node-object-name>
 export GPU_OPERATOR_NAMESPACE=nvidia-gpu-operator
 export CLUSTER_POLICY=gpu-cluster-policy
-# GPU_NODE is the hostname label used by the application's scheduler selector.
+# Hostname label used by H2O's workload scheduler selectors.
 export GPU_NODE="$(oc get node "$MIG_NODE" -o jsonpath='{.metadata.labels.kubernetes\.io/hostname}')"
-
 export DRIVER_POD="$(oc -n "$GPU_OPERATOR_NAMESPACE" get pods \
   -l app=nvidia-driver-daemonset --field-selector "spec.nodeName=$MIG_NODE" \
   -o jsonpath='{.items[0].metadata.name}')"
@@ -33,9 +29,9 @@ oc -n "$GPU_OPERATOR_NAMESPACE" exec "$DRIVER_POD" -- \
   nvidia-smi --query-gpu=index,name,memory.total,mig.mode.current --format=csv
 ```
 
-Confirm that this lists exactly one A100 with approximately 80 GB memory. On nodes with preinstalled drivers, use the administrator's supported method to run `nvidia-smi` instead of a driver pod.
+Confirm that GPU index 0 is the intended RTX PRO 6000 Blackwell with approximately 96 GB memory. Adjust the supplied configuration if the intended GPU has another index. With preinstalled drivers, use the administrator's supported method to run `nvidia-smi` instead of a driver pod.
 
-## Prepare for repartitioning
+## Prepare the GPU for MIG setup
 
 Save the current ClusterPolicy and node labels for reference:
 
@@ -52,18 +48,18 @@ oc get pods -A --field-selector "spec.nodeName=$MIG_NODE" -o wide
 
 The GPU must be free of user workloads before changing MIG mode or geometry. MIG Manager restarts GPU components, and some platforms require a GPU reset or node reboot. If your platform requires cordoning, draining, or enabling MIG Manager's `WITH_REBOOT` setting, follow its maintenance procedure and uncordon the node afterward. Changing the ClusterPolicy advertisement strategy also affects other GPU nodes in the cluster; coordinate this with their owners.
 
-## Create and advertise the 20/20/40 layout
+## Create and advertise the 48/48 layout
 
-The administrator-owned [MIG configuration](../deploy/mig/a100-20-20-40.yaml) defines `h2o-20-20-rhoai-40` for GPU index 0: two `2g.20gb` instances and one `3g.40gb` instance. It also provides `all-disabled` for maintenance. This file is **not installed by the application Helm chart**.
+The administrator-owned [MIG configuration](../deploy/mig/rtx-pro-6000-48-48.yaml) defines `h2o-48-48` for GPU index 0: two `2g.48gb` instances. It also supplies `all-disabled` for maintenance. The application Helm chart does not install this file.
 
-Inspect `spec.migManager.config.name` in the ClusterPolicy first. If an existing custom ConfigMap is in use, merge the new profile into it and retain its other configurations; use that ConfigMap name below. Otherwise, install the supplied configuration:
+Inspect `spec.migManager.config.name` in the ClusterPolicy. If a custom ConfigMap is already used, merge this profile into it and retain its other configurations, using that ConfigMap's name below. Otherwise:
 
 ```bash
-oc -n "$GPU_OPERATOR_NAMESPACE" apply -f deploy/mig/a100-20-20-40.yaml
-export MIG_CONFIGMAP=h2o-a100-mig-config
+oc -n "$GPU_OPERATOR_NAMESPACE" apply -f deploy/mig/rtx-pro-6000-48-48.yaml
+export MIG_CONFIGMAP=h2o-rtx-pro-6000-mig-config
 ```
 
-Use the `mixed` advertisement strategy so Kubernetes exposes distinct resource names for the 20 GB and 40 GB instances. After stopping all workloads on the GPU, configure MIG Manager and apply the profile:
+Use the `mixed` advertisement strategy to expose the explicit resource name `nvidia.com/mig-2g.48gb`. After stopping all workloads on the GPU:
 
 ```bash
 oc patch clusterpolicy "$CLUSTER_POLICY" --type=merge \
@@ -71,14 +67,13 @@ oc patch clusterpolicy "$CLUSTER_POLICY" --type=merge \
 
 # Wait for the operator to reconcile and the ClusterPolicy to report ready.
 oc get clusterpolicy "$CLUSTER_POLICY"
-
-oc label node "$MIG_NODE" nvidia.com/mig.config=h2o-20-20-rhoai-40 --overwrite
+oc label node "$MIG_NODE" nvidia.com/mig.config=h2o-48-48 --overwrite
 oc wait --for=jsonpath='{.metadata.labels.nvidia\.com/mig\.config\.state}'=success \
   "node/$MIG_NODE" --timeout=20m
-oc get node "$MIG_NODE" -o jsonpath='{.metadata.labels.nvidia\.com/mig\.config}{"\n"}{.metadata.labels.nvidia\.com/mig\.strategy}{"\n"}{.status.allocatable.nvidia\.com/mig-2g\.20gb}{"\n"}{.status.allocatable.nvidia\.com/mig-3g\.40gb}{"\n"}'
+oc get node "$MIG_NODE" -o jsonpath='{.metadata.labels.nvidia\.com/mig\.config}{"\n"}{.metadata.labels.nvidia\.com/mig\.strategy}{"\n"}{.status.allocatable.nvidia\.com/mig-2g\.48gb}{"\n"}'
 ```
 
-The final output must be `h2o-20-20-rhoai-40`, `mixed`, `2`, and `1`. Inspect the MIG Manager logs and device layout; reacquire the driver pod name because it may have restarted:
+The final output must be `h2o-48-48`, `mixed`, and `2`. Inspect MIG Manager logs and the actual layout; reacquire the driver pod name after any restart:
 
 ```bash
 oc -n "$GPU_OPERATOR_NAMESPACE" logs ds/nvidia-mig-manager --all-containers --tail=100
@@ -89,13 +84,13 @@ oc -n "$GPU_OPERATOR_NAMESPACE" exec "$DRIVER_POD" -- nvidia-smi -L
 oc -n "$GPU_OPERATOR_NAMESPACE" exec "$DRIVER_POD" -- nvidia-smi mig -lgi
 ```
 
-Verify two `2g.20gb` instances and one `3g.40gb` instance on the same physical GPU. Do not proceed based only on an old `success` label: check the applied profile, strategy, device layout, and allocatable counts. Disable time slicing and MPS for these resources so each advertised device represents a dedicated MIG instance. Allocatable counts describe total capacity, not free capacity; inspect existing pod allocations and namespace quotas too.
+Verify exactly two `2g.48gb` instances on the same physical GPU. Confirm the actual layout as well as the `success` label. Disable time slicing and MPS for these resources so each advertised device represents a dedicated MIG instance. Allocatable counts describe total capacity, not free capacity; check pod allocations and namespace quotas as well.
 
-## Use the two reserved 20 GB partitions for H2O
+## Allocate both 48 GB partitions to H2O
 
-H2O owns its two model deployments and endpoints; this chart does not create placeholder pods or consume their GPU allocations. The two instances provide roughly 40 GB total, with **20 GB per model**. H2O must verify that its models and runtime overhead fit.
+H2O owns both deployments and endpoints. Configure the model pod and function pod through their owning chart/operator, with one instance per pod. The application does not create placeholders or reserve devices by consuming them.
 
-Configure each of the two H2O model pods through its owning chart/operator. For a Deployment, adapt these fields under `spec.template.spec`:
+For each Deployment, adapt the following under `spec.template.spec`:
 
 ```yaml
 nodeSelector:
@@ -105,18 +100,20 @@ tolerations:
     operator: Exists
     effect: NoSchedule
 containers:
-  - name: <h2o-model-container>
+  - name: <h2o-model-or-function-container>
     image: <h2o-provided-image>
     resources:
       requests:
-        nvidia.com/mig-2g.20gb: 1
+        nvidia.com/mig-2g.48gb: 1
       limits:
-        nvidia.com/mig-2g.20gb: 1
+        nvidia.com/mig-2g.48gb: 1
 ```
 
-Use one replica for each model and include H2O's CPU, RAM, storage, startup arguments, credentials, and any additional node tolerations. For KServe, put `nodeSelector` and `tolerations` under `spec.predictor`, the GPU requests/limits under `spec.predictor.model.resources`, and set the metadata annotation `serving.kserve.io/gpu-resource-types: '["nvidia.com/mig-2g.20gb"]'` on each InferenceService. Do not request `nvidia.com/gpu` or `nvidia.com/mig-3g.40gb`. The device plugin assigns a distinct 20 GB instance to each pod; do not hard-code MIG UUIDs. Use `Recreate` for Deployment updates (or `spec.predictor.deploymentStrategy.type: Recreate` for KServe) because a third 20 GB instance is unavailable.
+Use one replica per workload and include H2O's CPU, RAM, storage, startup arguments, credentials, and any additional tolerations. The device plugin assigns different MIG UUIDs; do not hard-code them. Each pod has its own 48 GB allocation, and unused memory cannot be borrowed by the other pod. Use `Recreate` updates because a third partition is unavailable.
 
-Use a separate H2O namespace when the workloads have different owners. An administrator can cap that namespace with this ResourceQuota, applying it with `oc -n <h2o-namespace> apply -f <quota-file>`:
+If H2O uses KServe, put node selection and tolerations under `spec.predictor`, GPU requests/limits under `spec.predictor.model.resources`, and add `serving.kserve.io/gpu-resource-types: '["nvidia.com/mig-2g.48gb"]'` to the InferenceService metadata. Its platform must support an update strategy that avoids requiring a third partition, such as `spec.predictor.deploymentStrategy.type: Recreate`.
+
+An administrator can cap the H2O namespace with this quota:
 
 ```yaml
 apiVersion: v1
@@ -125,34 +122,17 @@ metadata:
   name: h2o-mig-budget
 spec:
   hard:
-    requests.nvidia.com/mig-2g.20gb: "2"
-    requests.nvidia.com/mig-3g.40gb: "0"
+    requests.nvidia.com/mig-2g.48gb: "2"
     requests.nvidia.com/gpu: "0"
 ```
 
-In the quickstart namespace, the corresponding caps are `requests.nvidia.com/mig-2g.20gb: "0"`, `requests.nvidia.com/mig-3g.40gb: "1"`, and `requests.nvidia.com/gpu: "0"`. These are optional administrator-managed quotas, not application chart resources. Quotas limit consumption; they do not reserve devices on a particular node. To enforce the ownership agreement, the administrator must also prevent other namespaces from requesting this node's MIG devices through namespace quotas/admission policy and appropriate node access controls. Until H2O deploys, both 20 GB instances remain unused and available to any otherwise eligible workload.
+For a separate application namespace, cap both resource requests at `"0"`. If H2O and the application share a namespace, use the H2O quota and enforce ownership through appropriate admission policies. Quotas cap consumption; they do not reserve specific devices. Prevent unrelated namespaces from consuming this GPU through quotas/admission policy and node access controls. These policies are administrator-managed, not application chart resources.
 
-Confirm both H2O pods select the intended node, each sees a different `2g.20gb` MIG UUID, and the OpenShift AI predictor sees the `3g.40gb` UUID. Validate H2O inference independently and then concurrently with the OpenShift AI server. Repartitioning affects all three workloads and must be coordinated with both owners.
+## Validate H2O workloads
 
-## Validate inference on the A100
+Confirm both pods select the intended node, request one `nvidia.com/mig-2g.48gb` each, and see different MIG UUIDs. Verify Blackwell kernel compatibility, model startup, and host/GPU memory usage independently and with both workloads running concurrently. Test each H2O endpoint, and confirm updates replace one pod without needing another MIG device.
 
-After installing the application, wait for its model server to become ready:
-
-```bash
-export NAMESPACE=<my-namespace>
-oc -n "$NAMESPACE" wait --for=condition=Ready inferenceservice/h2o-llm --timeout=30m
-oc -n "$NAMESPACE" get pods -o wide
-oc -n "$NAMESPACE" get deployment h2o-llm-predictor \
-  -o custom-columns=NAME:.metadata.name,STRATEGY:.spec.strategy.type,REPLICAS:.spec.replicas
-```
-
-Confirm the predictor selects the prepared node, uses `Recreate` with one replica, and requests one `nvidia.com/mig-3g.40gb`. Run `nvidia-smi -L` inside the predictor and compare its visible MIG UUID with the administrator's listing. The two 20 GB allocations should remain unconsumed until H2O deploys its models.
-
-Test ordinary inference through [the application's API docs](../README.md#try-a-model-request). This exercises the API-to-vLLM path without port forwarding. To validate tool calling, use a client with access to the internal vLLM endpoint: supply a tool definition, verify the returned structured call, execute it, and send the tool result back to obtain a final answer. `/ask` handles text prompts only.
-
-After H2O deploys, run representative requests against all three workloads concurrently. During a subsequent OpenShift AI model update, verify the old predictor terminates before its replacement starts and H2O's endpoints remain available. Record startup duration, concurrent request latency, tool-call correctness, and GPU/host OOM errors before increasing context or concurrency. API tests and Helm lint do not establish model startup or memory fit on the A100.
-
-If a predictor stays Pending, inspect events for node selection, taints, free MIG devices, host resources, and namespace quota. For startup failures, inspect predictor logs for download, driver/CUDA, quantization, and memory errors. Unused memory in H2O's partitions cannot be borrowed.
+Validate the application's text request against the [external endpoint](../README.md#try-a-model-request) while H2O is running. Confirm no application resources request a GPU. Record startup durations, concurrent request latency, and GPU/host OOM errors. Local tests and Helm lint cannot establish H2O memory fit or real inference behavior.
 
 ## Restore GPU configuration
 

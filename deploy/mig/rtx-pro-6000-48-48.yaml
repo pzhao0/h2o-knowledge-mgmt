@@ -1,10 +1,12 @@
 # Administrator-owned GPU Operator configuration; not installed by Helm.
+# NVIDIA RTX PRO 6000 Blackwell 96 GB: H2O model 48 GB, H2O function 48 GB.
+# Chat inference uses an external endpoint. GPU index 0 only; MIG advertisement must be mixed.
 # Apply in the GPU Operator namespace. If a custom config is already in use,
 # merge this profile into it instead of replacing the existing configuration.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: h2o-a100-mig-config
+  name: h2o-rtx-pro-6000-mig-config
 data:
   config.yaml: |
     version: v1
@@ -12,9 +14,8 @@ data:
       all-disabled:
         - devices: [0]
           mig-enabled: false
-      h2o-20-20-rhoai-40:
+      h2o-48-48:
         - devices: [0]
           mig-enabled: true
           mig-devices:
-            "3g.40gb": 1
-            "2g.20gb": 2
+            "2g.48gb": 2
