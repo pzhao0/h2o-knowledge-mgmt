@@ -17,6 +17,8 @@ spec:
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
+      annotations:
+        checksum/llm-secret: {{ include (print $.Template.BasePath "/llm-secret.yaml") . | sha256sum }}
       labels:
         {{- include "h2o-knowledge-mgmt.labels" . | nindent 8 }}
     spec:

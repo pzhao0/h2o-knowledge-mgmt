@@ -40,6 +40,8 @@ Set `LLM_BASE_URL` to the provider's API base URL, including `/v1` when required
 
 ## Installation
 
+Install `make`, Helm, `jq`, and the OpenShift CLI (`oc`), and log in to your cluster.
+
 After the administrator prepares H2O's GPU partitions, configure `.env`, then run:
 
 ```bash
