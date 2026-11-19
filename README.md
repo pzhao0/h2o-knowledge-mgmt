@@ -157,7 +157,7 @@ GPU notes:
 
 - `cluster-admin`
 
-Cluster administrator access is required because the installation creates a namespace and a ClusterRole and ClusterRoleBinding for h2oGPTe, and copies the default ingress certificate from the `openshift-ingress` namespace. The model chart creates namespace-scoped resources only; standalone model installation needs permission to create ServingRuntime, InferenceService, and ServiceAccount resources in the chosen namespace (and to create the namespace if absent).
+Cluster administrator access is required because the installation creates a namespace and a ClusterRole and ClusterRoleBinding for h2oGPTe, and copies the default ingress certificate from the `openshift-ingress` namespace.
 
 ## Deploy
 
@@ -296,9 +296,9 @@ The chart follows the [RedHatAI/gpt-oss-20b deployment example](https://huggingf
 - Context: 16,384 tokens, with OpenAI tool calling enabled
 - Host resources: 2 CPU / 16 GiB requested; 4 CPU / 32 GiB limit, in addition to the GPU
 
-OpenShift AI must have KServe and OCI modelcar support enabled. The model card configuration was validated on OpenShift AI 2.25; this chart has not been validated on a live cluster. The model needs additional GPU capacity beyond the two h2oGPTe workloads. Keep the existing h2oGPTe GPU/MIG settings unchanged; customize `resources`, `nodeSelector`, and `tolerations` in the model values for your hardware.
+OpenShift AI must have KServe and OCI modelcar support enabled. The model needs additional GPU capacity beyond the two h2oGPTe workloads. Keep the existing h2oGPTe GPU/MIG settings unchanged; customize `resources`, `nodeSelector`, and `tolerations` in the model values for your hardware.
 
-If Red Hat registry credentials are not already available to the model workload, have your administrator create a registry pull Secret in `NAMESPACE`. Reference its name in `deploy/helm/model/values.yaml`; do not put credentials in Git:
+OpenShift normally uses its [global pull secret](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/images/managing-images) for Red Hat registry authentication, so no extra pull Secret is usually needed. If the model image pull is denied, have your administrator check the registry credentials and image access. If a separate pull Secret is needed, reference its name in `deploy/helm/model/values.yaml`:
 
 ```yaml
 imagePullSecrets:
@@ -307,7 +307,14 @@ imagePullSecrets:
 
 Model settings live in `deploy/helm/model/values.yaml`. Edit that file to change the runtime image, storage URI, arguments, resources, or scheduling before running `make model-install`.
 
-Helm submits the resources but does not wait for the InferenceService to become ready. Open **Models** in the OpenShift AI dashboard and wait for the model to start before connecting h2oGPTe. The first start downloads large images. With default settings, use:
+Helm submits the resources but does not wait for the model to become ready. Before connecting h2oGPTe, wait for readiness with:
+
+```bash
+oc wait --for=condition=Ready inferenceservice/h2oai-model \
+  -n h2o-knowledge-mgmt --timeout=30m
+```
+
+Replace the namespace if you changed `NAMESPACE`. You can also check the model in the OpenShift AI dashboard. The first start downloads large images. With default settings, use:
 
 - Model ID: `gpt-oss-20b`
 - OpenAI base URL: `http://h2oai-model-predictor.h2o-knowledge-mgmt.svc.cluster.local:8080/v1`

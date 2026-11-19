@@ -1,5 +1,6 @@
 The model resources have been submitted to KServe. Helm does not wait for
-InferenceService readiness; wait for Ready=True in the OpenShift AI dashboard.
+InferenceService readiness. Wait for the model before connecting h2oGPTe:
+  oc wait --for=condition=Ready inferenceservice/{{ .Release.Name }} -n {{ .Release.Namespace }} --timeout=30m
 
 Connect h2oGPTe after the model is ready:
   Model ID: {{ .Values.model.servedName }}
