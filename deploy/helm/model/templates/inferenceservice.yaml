@@ -1,0 +1,37 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    opendatahub.io/dashboard: "true"
+    networking.kserve.io/visibility: cluster-local
+  annotations:
+    openshift.io/display-name: {{ .Values.model.servedName | quote }}
+    serving.kserve.io/deploymentMode: RawDeployment
+    security.opendatahub.io/enable-auth: "false"
+    serving.kserve.io/enable-prometheus-scraping: "true"
+spec:
+  predictor:
+    serviceAccountName: {{ .Release.Name }}
+    minReplicas: 1
+    maxReplicas: 1
+    {{- with .Values.imagePullSecrets }}
+    imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    model:
+      modelFormat:
+        name: vLLM
+      runtime: {{ .Release.Name }}
+      storageUri: {{ .Values.model.storageUri | quote }}
+      resources:
+        {{- toYaml .Values.resources | nindent 8 }}
+    {{- with .Values.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}

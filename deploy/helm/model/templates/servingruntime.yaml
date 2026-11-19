@@ -1,0 +1,46 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    opendatahub.io/dashboard: "true"
+  annotations:
+    openshift.io/display-name: vLLM for h2oGPTe
+    opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
+spec:
+  multiModel: false
+  supportedModelFormats:
+    - name: vLLM
+      autoSelect: false
+  annotations:
+    prometheus.io/port: "8080"
+    prometheus.io/path: /metrics
+  containers:
+    - name: kserve-container
+      image: {{ .Values.runtime.image | quote }}
+      command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+      args:
+        - --port=8080
+        - --model=/mnt/models
+        - {{ printf "--served-model-name=%s" .Values.model.servedName | quote }}
+        {{- with .Values.runtime.args }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      env:
+        - name: HF_HOME
+          value: /tmp/hf_home
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+      volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+  volumes:
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 2Gi

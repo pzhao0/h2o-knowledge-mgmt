@@ -1,0 +1,28 @@
+# Based on https://huggingface.co/RedHatAI/gpt-oss-20b
+# KServe modelcar support and registry.redhat.io pull credentials are required.
+model:
+  servedName: gpt-oss-20b
+  storageUri: oci://registry.redhat.io/rhelai1/modelcar-gpt-oss-20b:1.5
+runtime:
+  image: quay.io/modh/vllm:rhoai-2.25-cuda
+  args:
+    - --max-model-len=16384
+    - --gpu-memory-utilization=0.9
+    - --enable-auto-tool-choice
+    - --tool-call-parser=openai
+# Names of existing registry pull Secrets in the installation namespace.
+imagePullSecrets: []
+resources:
+  requests:
+    cpu: "2"
+    memory: 16Gi
+    nvidia.com/gpu: "1"
+  limits:
+    cpu: "4"
+    memory: 32Gi
+    nvidia.com/gpu: "1"
+nodeSelector: {}
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule

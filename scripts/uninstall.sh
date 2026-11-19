@@ -3,7 +3,7 @@
 # Usage: ./scripts/uninstall.sh   (run from the repository root or use an absolute path)
 #
 # Deletes the Helm release and the namespace from .env, including all documents and data.
-# Doesn't remove the cluster operators, or a model that you deployed in OpenShift AI.
+# Also removes this quickstart's model release. Leaves cluster operators unchanged.
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ confirm() {
   fi
 
   echo
-  echo "This deletes the Helm release ${RELEASE_NAME} and the namespace ${NAMESPACE},"
+  echo "This deletes the Helm releases ${RELEASE_NAME} and ${MODEL_RELEASE_NAME:-h2oai-model}, and the namespace ${NAMESPACE},"
   echo "including all documents, collections, and users stored in h2oGPTe."
   read -r -p "Type the namespace name to continue: " answer
   [[ "${answer}" == "${NAMESPACE}" ]] || die "Cancelled."
@@ -70,10 +70,11 @@ delete_namespace() {
 main() {
   load_env
   confirm
+  "${SCRIPT_DIR}/model.sh" uninstall
   uninstall_release
   delete_namespace
   log "Done"
-  echo "If you deployed a model in OpenShift AI, delete it in the OpenShift AI dashboard."
+  echo "Models deployed manually in other namespaces are unchanged."
 }
 
 main "$@"

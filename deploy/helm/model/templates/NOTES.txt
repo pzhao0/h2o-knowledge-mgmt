@@ -1,0 +1,9 @@
+The model resources have been submitted to KServe. Helm does not wait for
+InferenceService readiness; wait for Ready=True in the OpenShift AI dashboard.
+
+Connect h2oGPTe after the model is ready:
+  Model ID: {{ .Values.model.servedName }}
+  OpenAI base URL: http://{{ .Release.Name }}-predictor.{{ .Release.Namespace }}.svc.cluster.local:8080/v1
+
+This endpoint is internal and has no token authentication. Restrict access to
+trusted workloads with your cluster's network policies. No external route is requested.
