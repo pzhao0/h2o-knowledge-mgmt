@@ -193,7 +193,7 @@ Copy the example settings file and add your H2O credentials:
 cp .env.example .env
 ```
 
-Edit `.env`. All H2O variables must be set; the installation script stops if one is missing. The model settings are optional. `.env.example` contains the default values.
+Edit `.env`. All H2O variables must be set; the installation script stops if one is missing. `.env.example` contains the default values.
 
 | Variable | Description | Default in `.env.example` |
 | --- | --- | --- |
@@ -204,8 +204,6 @@ Edit `.env`. All H2O variables must be set; the installation script stops if one
 | `NAMESPACE` | Namespace for h2oGPTe | `h2o-knowledge-mgmt` |
 | `KEYCLOAK_ADMIN_PASSWORD` | Password of the Keycloak administrator | A test password |
 | `H2OGPTE_ADMIN_PASSWORD` | Password of the h2oGPTe admin user `test` that the installation creates | A test password |
-| `MODEL_RELEASE_NAME` | Separate Helm release for the optional model; keep unchanged until uninstalled | `h2oai-model` |
-| `MODEL_VALUES_FILE` | Optional model Helm values override file, absolute or relative to the repository root | Empty |
 
 The default passwords are for testing only. Set your own passwords if other people can reach the h2oGPTe URL.
 
@@ -300,15 +298,14 @@ The chart follows the [RedHatAI/gpt-oss-20b deployment example](https://huggingf
 
 OpenShift AI must have KServe and OCI modelcar support enabled. The model card configuration was validated on OpenShift AI 2.25; this chart has not been validated on a live cluster. The model needs additional GPU capacity beyond the two h2oGPTe workloads. Keep the existing h2oGPTe GPU/MIG settings unchanged; customize `resources`, `nodeSelector`, and `tolerations` in the model values for your hardware.
 
-If Red Hat registry credentials are not already available to the model workload, have your administrator create a registry pull Secret in `NAMESPACE`. Reference it in a local values file; do not put credentials in Git:
+If Red Hat registry credentials are not already available to the model workload, have your administrator create a registry pull Secret in `NAMESPACE`. Reference its name in `deploy/helm/model/values.yaml`; do not put credentials in Git:
 
 ```yaml
-# Example: model-values.local.yaml
 imagePullSecrets:
   - name: redhat-registry
 ```
 
-Set `MODEL_VALUES_FILE` in `.env` to that file's path. You can also override `runtime.image`, `model.storageUri`, and `runtime.args` there. List overrides replace the entire list.
+Model settings live in `deploy/helm/model/values.yaml`. Edit that file to change the runtime image, storage URI, arguments, resources, or scheduling before running `make model-install`.
 
 Helm submits the resources but does not wait for the InferenceService to become ready. Open **Models** in the OpenShift AI dashboard and wait for the model to start before connecting h2oGPTe. The first start downloads large images. With default settings, use:
 
@@ -316,7 +313,7 @@ Helm submits the resources but does not wait for the InferenceService to become 
 - OpenAI base URL: `http://h2oai-model-predictor.h2o-knowledge-mgmt.svc.cluster.local:8080/v1`
 - API key: a non-empty placeholder such as `unused` if the h2oGPTe form requires it
 
-Replace the release name and namespace in the URL if you changed `MODEL_RELEASE_NAME` or `NAMESPACE`.
+Replace `h2o-knowledge-mgmt` in the URL if you changed `NAMESPACE`. The model release name is always `h2oai-model`.
 
 To remove only the model and keep h2oGPTe and its data:
 
@@ -422,7 +419,7 @@ make undeploy
 
 You can also run `./scripts/uninstall.sh` directly. Both commands keep the namespace confirmation prompt.
 
-The script reads `NAMESPACE` from `.env`, shows the cluster that you're logged in to, and asks you to type the namespace name to confirm. It uninstalls the optional model release first (including its InferenceService and ServingRuntime), then the h2oGPTe release, and deletes the namespace, with all documents, collections, and users stored in h2oGPTe. Model cleanup also runs when the model was installed separately; a missing model release is harmless. Keep `MODEL_RELEASE_NAME` consistent between install and uninstall. It doesn't remove the cluster operators (NVIDIA GPU Operator, Node Feature Discovery, OpenShift AI).
+The script reads `NAMESPACE` from `.env`, shows the cluster that you're logged in to, and asks you to type the namespace name to confirm. It uninstalls the optional model release first (including its InferenceService and ServingRuntime), then the h2oGPTe release, and deletes the namespace, with all documents, collections, and users stored in h2oGPTe. Model cleanup also runs when the model was installed separately; a missing model release is harmless. It doesn't remove the cluster operators (NVIDIA GPU Operator, Node Feature Discovery, OpenShift AI).
 
 Models you deployed manually in other namespaces are unchanged.
 

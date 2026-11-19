@@ -45,7 +45,7 @@ confirm() {
   fi
 
   echo
-  echo "This deletes the Helm releases ${RELEASE_NAME} and ${MODEL_RELEASE_NAME:-h2oai-model}, and the namespace ${NAMESPACE},"
+  echo "This deletes the Helm releases ${RELEASE_NAME} and h2oai-model, and the namespace ${NAMESPACE},"
   echo "including all documents, collections, and users stored in h2oGPTe."
   read -r -p "Type the namespace name to continue: " answer
   [[ "${answer}" == "${NAMESPACE}" ]] || die "Cancelled."

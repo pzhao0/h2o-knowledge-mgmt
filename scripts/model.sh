@@ -14,20 +14,12 @@ esac
 # shellcheck source=/dev/null
 source "${QUICKSTART_DIR}/.env"
 : "${NAMESPACE:?Set NAMESPACE in .env}"
-MODEL_RELEASE_NAME="${MODEL_RELEASE_NAME:-h2oai-model}"
-[[ "${MODEL_RELEASE_NAME}" != h2oai ]] || { echo "MODEL_RELEASE_NAME must differ from h2oai." >&2; exit 1; }
 
 if [[ "${action}" == install ]]; then
-  helm_args=(upgrade --install "${MODEL_RELEASE_NAME}" "${QUICKSTART_DIR}/deploy/helm/model"
-    --namespace "${NAMESPACE}" --create-namespace --timeout 30m)
-  if [[ -n "${MODEL_VALUES_FILE:-}" ]]; then
-    [[ "${MODEL_VALUES_FILE}" == /* ]] || MODEL_VALUES_FILE="${QUICKSTART_DIR}/${MODEL_VALUES_FILE}"
-    [[ -f "${MODEL_VALUES_FILE}" ]] || { echo "Model values file not found: ${MODEL_VALUES_FILE}" >&2; exit 1; }
-    helm_args+=(--values "${MODEL_VALUES_FILE}")
-  fi
-  helm "${helm_args[@]}"
+  helm upgrade --install h2oai-model "${QUICKSTART_DIR}/deploy/helm/model" \
+    --namespace "${NAMESPACE}" --create-namespace --timeout 30m
 else
   # --ignore-not-found keeps cleanup idempotent while preserving real Helm errors.
-  helm uninstall "${MODEL_RELEASE_NAME}" --namespace "${NAMESPACE}" \
+  helm uninstall h2oai-model --namespace "${NAMESPACE}" \
     --ignore-not-found --wait --timeout 10m
 fi
