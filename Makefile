@@ -2,7 +2,7 @@
 
 INSTALL_MODEL ?= false
 
-.PHONY: help lint deploy undeploy install uninstall model-install model-uninstall helm-lint helm-template
+.PHONY: help lint deploy undeploy install uninstall model-install model-uninstall helm-lint
 
 help:
 	@printf '%s\n' \
@@ -10,8 +10,7 @@ help:
 	  'make uninstall                    Remove both releases and the namespace (asks for confirmation)' \
 	  'make model-install                Install or upgrade only the vLLM model using .env' \
 	  'make model-uninstall              Remove only the vLLM model; keep h2oGPTe and its data' \
-	  'make lint                         Check Bash syntax and lint the model Helm chart' \
-	  'make helm-template                Render the model Helm chart locally'
+	  'make lint                         Check Bash syntax and lint the model Helm chart'
 
 lint: helm-lint
 	bash -n scripts/install.sh
@@ -20,9 +19,6 @@ lint: helm-lint
 
 helm-lint:
 	helm lint deploy/helm/model --strict
-
-helm-template:
-	helm template h2oai-model deploy/helm/model --namespace h2o-knowledge-mgmt
 
 deploy install:
 	./scripts/install.sh --install-model "$(INSTALL_MODEL)"

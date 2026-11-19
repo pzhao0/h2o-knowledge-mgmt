@@ -4,7 +4,7 @@ InferenceService readiness. Wait for the model before connecting h2oGPTe:
 
 Connect h2oGPTe after the model is ready:
   Model ID: {{ .Values.model.servedName }}
-  OpenAI base URL: http://{{ .Release.Name }}-predictor.{{ .Release.Namespace }}.svc.cluster.local:8080/v1
+  OpenAI base URL: http://{{ .Release.Name }}-predictor.{{ .Release.Namespace }}.svc.cluster.local/v1
 
 This endpoint is internal and has no token authentication. Restrict access to
 trusted workloads with your cluster's network policies. No external route is requested.

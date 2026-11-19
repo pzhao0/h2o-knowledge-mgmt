@@ -3,5 +3,5 @@ name: h2ogpte-model
 description: Optional gpt-oss-20b model serving on OpenShift AI with vLLM
 type: application
 version: 0.1.0
-appVersion: "2.25"
+appVersion: "3.2.2"
 icon: https://www.redhat.com/favicon.ico

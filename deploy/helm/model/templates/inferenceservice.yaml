@@ -10,9 +10,10 @@ metadata:
     openshift.io/display-name: {{ .Values.model.servedName | quote }}
     serving.kserve.io/deploymentMode: RawDeployment
     security.opendatahub.io/enable-auth: "false"
-    serving.kserve.io/enable-prometheus-scraping: "true"
 spec:
   predictor:
+    deploymentStrategy:
+      type: Recreate
     serviceAccountName: {{ .Release.Name }}
     minReplicas: 1
     maxReplicas: 1

@@ -171,10 +171,10 @@ Before you install, make sure you have the following:
 2. **An OpenShift cluster** that meets the [hardware](#minimum-hardware-requirements) and [software](#minimum-software-requirements) requirements, with the Node Feature Discovery Operator and the NVIDIA GPU Operator installed. OpenShift AI is also needed for the model on the cluster. If you use an external model endpoint instead, you need its URL, model ID, and API key.
 3. **Access to the cluster as a cluster administrator:**
    ```bash
-    oc whoami
-    oc get nodes
+      oc whoami
+      oc get nodes
    ```
-4. **Network access** to Docker Hub, from your workstation (H2O Helm chart) and from the cluster (H2O images). For the optional model, the cluster also needs access to `quay.io` (vLLM) and `registry.redhat.io` (modelcar), with valid Red Hat registry pull credentials. An external model requires network access to its endpoint.
+4. **Network access** to Docker Hub, from your workstation (H2O Helm chart) and from the cluster (H2O images). For the optional model, the cluster also needs access to `registry.redhat.io` (vLLM runtime and modelcar), with valid Red Hat registry pull credentials. An external model requires network access to its endpoint.
 
 This quickstart uses the cluster's default application domain (`*.apps.<cluster-domain>`) and its default certificate, so you don't need to create DNS records or certificates.
 
@@ -220,10 +220,10 @@ make deploy
 To also deploy the model, run:
 
 ```bash
-make install INSTALL_MODEL=true
+make deploy INSTALL_MODEL=true
 ```
 
-`make deploy INSTALL_MODEL=true` is an alias. You can also run `./scripts/install.sh --with-model` directly. Without the flag, installation only deploys h2oGPTe. All commands read the repository-root `.env` as Bash variables.
+Without `INSTALL_MODEL=true`, installation only deploys h2oGPTe. All commands read the repository-root `.env` as Bash variables.
 
 The script prints each step as it runs:
 
@@ -286,26 +286,9 @@ If you used `INSTALL_MODEL=true`, the model resources are already installed. To 
 make model-install
 ```
 
-This target only requires `NAMESPACE` in `.env`; H2O credentials are not needed. It creates Helm release `h2oai-model` in that namespace, with a dedicated ServiceAccount, ServingRuntime, and InferenceService. KServe manages the predictor Deployment and Service. No external route is requested. The internal endpoint has no token authentication; use network policies to limit access to trusted workloads.
+This target uses `NAMESPACE` from `.env` and installs the model in the same namespace as h2oGPTe. The endpoint is internal and has no token authentication; use network policies to limit access to trusted workloads.
 
-The chart follows the [RedHatAI/gpt-oss-20b deployment example](https://huggingface.co/RedHatAI/gpt-oss-20b):
-
-- Modelcar: `oci://registry.redhat.io/rhelai1/modelcar-gpt-oss-20b:1.5`
-- Runtime: `quay.io/modh/vllm:rhoai-2.25-cuda`, validated for this model in its model card; override it for your OpenShift AI version as needed
-- Serving mode: KServe `RawDeployment`, with one replica and one NVIDIA GPU
-- Context: 16,384 tokens, with OpenAI tool calling enabled
-- Host resources: 2 CPU / 16 GiB requested; 4 CPU / 32 GiB limit, in addition to the GPU
-
-OpenShift AI must have KServe and OCI modelcar support enabled. The model needs additional GPU capacity beyond the two h2oGPTe workloads. Keep the existing h2oGPTe GPU/MIG settings unchanged; customize `resources`, `nodeSelector`, and `tolerations` in the model values for your hardware.
-
-OpenShift normally uses its [global pull secret](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/images/managing-images) for Red Hat registry authentication, so no extra pull Secret is usually needed. If the model image pull is denied, have your administrator check the registry credentials and image access. If a separate pull Secret is needed, reference its name in `deploy/helm/model/values.yaml`:
-
-```yaml
-imagePullSecrets:
-  - name: redhat-registry
-```
-
-Model settings live in `deploy/helm/model/values.yaml`. Edit that file to change the runtime image, storage URI, arguments, resources, or scheduling before running `make model-install`.
+The chart deploys [RedHatAI/gpt-oss-20b](https://huggingface.co/RedHatAI/gpt-oss-20b) with vLLM and needs one additional NVIDIA GPU. OpenShift AI must have KServe and OCI modelcar support enabled. Model settings live in `deploy/helm/model/values.yaml`. If your GPU nodes have a custom taint, add the matching toleration under `tolerations` in that file before deploying.
 
 Helm submits the resources but does not wait for the model to become ready. Before connecting h2oGPTe, wait for readiness with:
 
@@ -317,7 +300,7 @@ oc wait --for=condition=Ready inferenceservice/h2oai-model \
 Replace the namespace if you changed `NAMESPACE`. You can also check the model in the OpenShift AI dashboard. The first start downloads large images. With default settings, use:
 
 - Model ID: `gpt-oss-20b`
-- OpenAI base URL: `http://h2oai-model-predictor.h2o-knowledge-mgmt.svc.cluster.local:8080/v1`
+- OpenAI base URL: `http://h2oai-model-predictor.h2o-knowledge-mgmt.svc.cluster.local/v1`
 - API key: a non-empty placeholder such as `unused` if the h2oGPTe form requires it
 
 Replace `h2o-knowledge-mgmt` in the URL if you changed `NAMESPACE`. The model release name is always `h2oai-model`.
@@ -327,8 +310,6 @@ To remove only the model and keep h2oGPTe and its data:
 ```bash
 make model-uninstall
 ```
-
-For local validation, run `make lint` (Bash syntax and strict Helm lint), or `make helm-lint` for only the chart. `make helm-template` renders the model resources without a cluster. CI runs `make lint`.
 
 #### Option 2: use an external model endpoint
 
@@ -350,29 +331,29 @@ oc run test-model-access --rm -it --restart=Never \
 2. In the sidebar, select **Models**, and then select **Add Model**.
 3. Switch the dialog to **Raw JSON**, and paste the following model configuration. Replace the values in angle brackets:
    ```json
-    {
-      "display_name": "<model ID>",
-      "base_model": "<model ID>",
-      "inference_server": "litellm",
-      "max_seq_len": 16384,
-      "max_output_seq_len": 8192,
-      "images_num_max": -2,
-      "is_actually_vision_model": false,
-      "is_actually_reasoning_model": true,
-      "lite_llm_yaml": "{\"model_name\": \"<model ID>\", \"litellm_params\": {\"model\": \"openai/<model ID>\", \"api_base\": \"<endpoint URL>\", \"api_key\": \"<API key>\"}}",
-      "cost_per_1k_input_tokens": 0.0001,
-      "cost_per_1k_output_tokens": 0.00025
-    }
+      {
+        "display_name": "<model ID>",
+        "base_model": "<model ID>",
+        "inference_server": "litellm",
+        "max_seq_len": 16384,
+        "max_output_seq_len": 8192,
+        "images_num_max": -2,
+        "is_actually_vision_model": false,
+        "is_actually_reasoning_model": true,
+        "lite_llm_yaml": "{\"model_name\": \"<model ID>\", \"litellm_params\": {\"model\": \"openai/<model ID>\", \"api_base\": \"<endpoint URL>\", \"api_key\": \"<API key>\"}}",
+        "cost_per_1k_input_tokens": 0.0001,
+        "cost_per_1k_output_tokens": 0.00025
+      }
    ```
    - `<model ID>`: the model ID that the endpoint expects, for example `gpt-oss-20b`.
    - `<endpoint URL>`: the endpoint URL, ending in `/v1`.
    - `<API key>`: the token or API key of the endpoint, or `unused` for the internal Helm model.
 
-    The context limits shown match the Helm model. Adjust them to your endpoint if you use an external model.
+     The context limits shown match the Helm model. Adjust them to your endpoint if you use an external model.
 
-    `lite_llm_yaml` is a JSON string inside the JSON, so keep the backslashes before its quotes.
+     `lite_llm_yaml` is a JSON string inside the JSON, so keep the backslashes before its quotes.
 
-    ![h2oGPTe Add Model dialog in Raw JSON mode, with the configuration for gpt-oss-120b on an external endpoint](docs/images/h2ogpte-add-model-raw-json.png)
+     ![h2oGPTe Add Model dialog in Raw JSON mode, with the configuration for gpt-oss-120b on an external endpoint](docs/images/h2ogpte-add-model-raw-json.png)
 4. Select **Save**. h2oGPTe tests the model before it saves it.
 5. Run the self-tests for the new model: select **Run self-tests**, then **Quick test**, and then your model. When the tests finish, the model's **Effective status** is **Effective**, and the table shows its estimated accuracy, speed, and latency.
 
@@ -401,9 +382,9 @@ The `sample-documents/` folder is a local staging directory for documents; the r
    - "How do I create a project in OpenShift AI?"
    - "What is a workbench in OpenShift AI, and how do I start one?"
 
-    h2oGPTe answers from the documents in the collection, and names the source, such as the table and page in the document:
+     h2oGPTe answers from the documents in the collection, and names the source, such as the table and page in the document:
 
-    ![h2oGPTe chat in the Red Hat OpenShift and OpenShift AI collection, answering "What are the main components of OpenShift Container Platform" with a table of Kubernetes components and the source table and page](docs/images/h2ogpte-chat-answer.png)
+     ![h2oGPTe chat in the Red Hat OpenShift and OpenShift AI collection, answering "What are the main components of OpenShift Container Platform" with a table of Kubernetes components and the source table and page](docs/images/h2ogpte-chat-answer.png)
 3. **Check the sources.** Below the answer, select **References**. The **References** panel shows the document pages that the answer used, with the matching passages highlighted and a relevance score for each page. Use **Score Threshold** to show only the most relevant pages.
 
    ![h2oGPTe chat answer with the References panel open, showing highlighted pages of the OpenShift Overview PDF with their scores](docs/images/h2ogpte-references.png)
@@ -426,7 +407,7 @@ make undeploy
 
 You can also run `./scripts/uninstall.sh` directly. Both commands keep the namespace confirmation prompt.
 
-The script reads `NAMESPACE` from `.env`, shows the cluster that you're logged in to, and asks you to type the namespace name to confirm. It uninstalls the optional model release first (including its InferenceService and ServingRuntime), then the h2oGPTe release, and deletes the namespace, with all documents, collections, and users stored in h2oGPTe. Model cleanup also runs when the model was installed separately; a missing model release is harmless. It doesn't remove the cluster operators (NVIDIA GPU Operator, Node Feature Discovery, OpenShift AI).
+The script reads `NAMESPACE` from `.env`, shows the cluster that you're logged in to, and asks you to type the namespace name to confirm. It uninstalls the optional model release first, then the h2oGPTe release, and deletes the namespace, with all documents, collections, and users stored in h2oGPTe. Model cleanup also runs when the model was installed separately; a missing model release is harmless. It doesn't remove the cluster operators (NVIDIA GPU Operator, Node Feature Discovery, OpenShift AI).
 
 Models you deployed manually in other namespaces are unchanged.
 
