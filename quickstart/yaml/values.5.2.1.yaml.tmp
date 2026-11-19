@@ -1,0 +1,132 @@
+# Helm values template for the H2O AI Cloud chart 5.2.1 (h2oGPTe only).
+#
+# scripts/install.sh generates yaml/values.yaml from this file and replaces:
+#   __IMAGE_REGISTRY__  with H2O_REGISTRY from .env
+#   __CLOUD_HOST__      with the cluster's application domain (apps.<cluster-domain>)
+#
+# The script creates these secrets before the Helm install, and the values below use them:
+#   h2oai-tls                  copy of the cluster's default ingress certificate
+#   h2oai-registry             image pull secret for the H2O registry
+#   h2oai-h2ogpte-license      h2oGPTe license (key license.sig)
+#   h2oai-keycloak-admin-user  Keycloak administrator password (key password)
+#
+# GPUs: this template uses full GPUs (nvidia.com/gpu). To use NVIDIA MIG instead, set the
+# two gpuResourceName values (h2ogpte models and h2ogpt function) to the MIG resource of
+# your nodes, for example nvidia.com/mig-2g.48gb. 
+
+global:
+  imageRegistry: __IMAGE_REGISTRY__
+  cloudHost: __CLOUD_HOST__
+  cloudProtocol: https
+  createNamespaces: false
+
+  # Scheduling profile for the pods that may run on the GPU nodes.
+  # The toleration matches the default taint of GPU nodes.
+  profiles:
+    h2ogpte-gpu-deployment:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+
+  # Delete the persistent volume claims when the release is uninstalled.
+  pvcAnnotations:
+    "helm.sh/resource-policy": delete
+
+  imagePullSecrets:
+    - h2oai-registry
+
+  gateway:
+    enabled: false
+    ingressEnabled: false
+  ingressEnabled: true
+  tlsSecretName: h2oai-tls
+
+  securityContext:
+    pod:
+      preferGlobal: true
+      runAsUser: ""
+      runAsGroup: ""
+      fsGroup: ""
+    container:
+      preferGlobal: true
+      runAsNonRoot: true
+      runAsUser: ""
+      runAsGroup: ""
+      allowPrivilegeEscalation: false
+      privileged: false
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        add: []
+        drop:
+          - ALL
+
+  # Only h2oGPTe and the services it needs.
+  components:
+    redis:
+      enabled: true
+    h2ogpt:
+      enabled: true
+    h2ogpte:
+      enabled: true
+    postgresql:
+      enabled: true
+    minio:
+      enabled: true
+    keycloak:
+      enabled: true
+
+# Use the Keycloak admin secret that the script creates, instead of a generated one.
+secret:
+  keycloak-admin-user:
+    existingName: h2oai-keycloak-admin-user
+
+h2ogpte:
+  config:
+    license:
+      existingSecret: h2oai-h2ogpte-license
+    models:
+      resources:
+        gpuResourceName: nvidia.com/gpu
+  deployment:
+    models:
+      profile: h2ogpte-gpu-deployment
+
+h2ogpt:
+  config:
+    function:
+      resources:
+        gpuResourceName: nvidia.com/gpu
+    agentShared:
+      resources:
+        requests: {memory: 16Gi}
+        limits: {memory: 32Gi}
+    agentIsolated:
+      resources:
+        requests: {memory: 16Gi}
+        limits: {memory: 32Gi}
+  deployment:
+    function:
+      profile: h2ogpte-gpu-deployment
+    agent-shared:
+      profile: h2ogpte-gpu-deployment
+    agent-isolated:
+      profile: h2ogpte-gpu-deployment
+
+postgresql:
+  imagePullSecrets:
+    - name: h2oai-registry
+
+keycloak:
+  imagePullSecrets:
+    - name: h2oai-registry
+
+minio:
+  imagePullSecrets:
+    - name: h2oai-registry
+
+redis:
+  imagePullSecrets:
+    - name: h2oai-registry
