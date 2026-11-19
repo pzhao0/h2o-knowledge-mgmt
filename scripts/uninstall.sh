@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Remove the h2oGPTe installation of the knowledge management quickstart.
-# Usage: ./scripts/uninstall.sh   (run from the quickstart folder or anywhere else)
+# Usage: ./scripts/uninstall.sh   (run from the repository root or use an absolute path)
 #
 # Deletes the Helm release and the namespace from .env, including all documents and data.
 # Doesn't remove the cluster operators, or a model that you deployed in OpenShift AI.

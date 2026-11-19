@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install H2O Enterprise h2oGPTe on OpenShift for the knowledge management quickstart.
-# Usage: ./scripts/install.sh   (run from the quickstart folder or anywhere else)
+# Usage: ./scripts/install.sh   (run from the repository root or use an absolute path)
 
 set -euo pipefail
 
@@ -26,8 +26,8 @@ PULL_SECRET_NAME="h2oai-registry"
 LICENSE_SECRET_NAME="h2oai-h2ogpte-license"
 KEYCLOAK_ADMIN_SECRET_NAME="h2oai-keycloak-admin-user"
 
-# Helm values: yaml/values.<chart version>.yaml.tmp is the template, yaml/values.yaml is generated.
-YAML_DIR="${QUICKSTART_DIR}/yaml"
+# Helm values: deploy/helm/values.<chart version>.yaml.tmp is the template, deploy/helm/values.yaml is generated.
+YAML_DIR="${QUICKSTART_DIR}/deploy/helm"
 VALUES_FILE="${YAML_DIR}/values.yaml"
 
 # Helm release name. The chart's secret names (h2oai-*) depend on it.
@@ -154,7 +154,7 @@ create_keycloak_admin_secret() {
   apply_secret "${KEYCLOAK_ADMIN_SECRET_NAME}" Opaque password "${KEYCLOAK_ADMIN_PASSWORD}"
 }
 
-# Step 6: generate yaml/values.yaml from the template for H2O_CHART_VERSION.
+# Step 6: generate deploy/helm/values.yaml from the template for H2O_CHART_VERSION.
 generate_values() {
   log "Step 6: Helm values for chart ${H2O_CHART_VERSION}"
   local template="${YAML_DIR}/values.${H2O_CHART_VERSION}.yaml.tmp"
