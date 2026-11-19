@@ -1,1 +1,0 @@
-"""Sample document upload job."""

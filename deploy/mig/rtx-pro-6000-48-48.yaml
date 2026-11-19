@@ -1,6 +1,7 @@
 # Administrator-owned GPU Operator configuration; not installed by Helm.
 # NVIDIA RTX PRO 6000 Blackwell 96 GB: H2O model 48 GB, H2O function 48 GB.
-# Chat inference uses an external endpoint. GPU index 0 only; MIG advertisement must be mixed.
+# Chat inference needs separate GPU capacity or an external endpoint.
+# GPU index 0 only; MIG advertisement must be mixed.
 # Apply in the GPU Operator namespace. If a custom config is already in use,
 # merge this profile into it instead of replacing the existing configuration.
 apiVersion: v1

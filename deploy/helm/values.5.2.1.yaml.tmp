@@ -1,6 +1,6 @@
 # Helm values template for the H2O AI Cloud chart 5.2.1 (h2oGPTe only).
 #
-# scripts/install.sh generates yaml/values.yaml from this file and replaces:
+# scripts/install.sh generates deploy/helm/values.yaml from this file and replaces:
 #   __IMAGE_REGISTRY__  with H2O_REGISTRY from .env
 #   __CLOUD_HOST__      with the cluster's application domain (apps.<cluster-domain>)
 #
@@ -12,7 +12,7 @@
 #
 # GPUs: this template uses full GPUs (nvidia.com/gpu). To use NVIDIA MIG instead, set the
 # two gpuResourceName values (h2ogpte models and h2ogpt function) to the MIG resource of
-# your nodes, for example nvidia.com/mig-2g.48gb. 
+# your nodes, for example nvidia.com/mig-2g.48gb. See docs/gpu-mig-setup.md.
 
 global:
   imageRegistry: __IMAGE_REGISTRY__
